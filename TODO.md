@@ -42,8 +42,9 @@ Spec source: mowbot_plans / Docking plan / `03_DOCK_PI_ROS2_AND_WEBUI.md`
 - [x] Zenoh router config (`deploy/zenoh-dock-router.json5`) with connect endpoint `tcp/192.168.1.90:7447` (robot Pi, static)
 - [x] systemd units (`deploy/*.service`): `zenoh-dock-router`, `mowbot-dock-agent` (Restart=on-failure, After=router, `RMW_IMPLEMENTATION=rmw_zenoh_cpp`)
 - [x] One-time Pi setup checklist: `deploy/PI_SETUP.md`
-- [ ] Run PI_SETUP.md on the real Pi (flash, ROS runtime, deploy, enable services)
-- [ ] End-to-end smoke test on the Pi with the real Nano attached
+- [x] Run PI_SETUP.md on the real Pi (flash, ROS runtime, deploy, enable services) — done 2026-08-19, dock Pi live at 192.168.1.91
+- [x] End-to-end smoke test on the Pi with the real Nano attached — agent receives EVT:BOOT:0.1.4 + status frames; dock/* topics visible over WiFi from the workstation
+- [ ] Verify zenoh federation dock↔robot with the robot powered on (robot was off during setup)
 
 ## 6. Later (separate from this package)
 - [ ] Second `mowbot_mqtt_bridge` instance (dock topics.yaml, Mosquitto `dock` user/ACL)

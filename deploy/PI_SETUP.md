@@ -35,6 +35,15 @@ sudo netplan apply
 Make sure the router's DHCP pool excludes (or reserves) 192.168.1.91.
 
 ## 3. Install the ROS 2 Jazzy runtime
+Gotcha (hit 2026-08-19): the Ubuntu 24.04.3 preinstalled Pi image ships with
+only `noble` + `noble-security` apt suites, but has `noble-updates` package
+revisions preinstalled — ROS install then fails with `-dev` exact-version
+conflicts. Fix first:
+```bash
+sudo sed -i 's/^Suites: noble$/Suites: noble noble-updates/' /etc/apt/sources.list.d/ubuntu.sources
+sudo apt update && sudo apt upgrade -y
+```
+Then:
 ```bash
 sudo apt install -y curl
 export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '{print $4}')
