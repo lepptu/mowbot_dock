@@ -1,0 +1,19 @@
+# Dock agent: bridges the dock Arduino Nano to ROS 2 (dock/* topics).
+# Install: sudo cp mowbot-dock-agent.service /etc/systemd/system/
+#          sudo systemctl enable --now mowbot-dock-agent
+# Requires: user ubuntu in the dialout group (Nano on /dev/ttyUSB0).
+[Unit]
+Description=Mowbot dock agent (Nano serial to ROS 2)
+After=zenoh-dock-router.service
+Wants=zenoh-dock-router.service
+
+[Service]
+User=ubuntu
+# Without this the node silently comes up on Fast DDS, invisible to zenoh.
+Environment=RMW_IMPLEMENTATION=rmw_zenoh_cpp
+ExecStart=/bin/bash -c '. /opt/ros/jazzy/setup.sh && . /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/setup.sh && exec /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/mowbot_dock/lib/mowbot_dock/dock_agent_node'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

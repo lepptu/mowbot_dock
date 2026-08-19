@@ -37,10 +37,12 @@ Spec source: mowbot_plans / Docking plan / `03_DOCK_PI_ROS2_AND_WEBUI.md`
       (full IDLE→…→COMPLETE session verified over rmw_zenoh; note: Fast DDS discovery is broken
       under qemu, test with RMW_IMPLEMENTATION=rmw_zenoh_cpp + rmw_zenohd in the container)
 
-## 5. Deploy to dock Pi
-- [ ] `deploy.sh` in `mowbot_dock_builder/`: rsync `install/` → `pi:~/mowbot_dock/mowbot_dock_ws/install/`
-- [ ] Zenoh router config on dock Pi with connect endpoint `tcp/192.168.1.90:7447` (robot Pi, static)
-- [ ] systemd units: `zenoh-dock-router.service`, `mowbot-dock-agent.service` (Restart=on-failure, After=router, `RMW_IMPLEMENTATION=rmw_zenoh_cpp` in every unit)
+## 5. Deploy to dock Pi (files prepared 2026-08-19 — untested until the Pi exists)
+- [x] `deploy.sh` in `mowbot_dock_builder/`: rsync `install/` + `deploy/` → Pi, restart agent
+- [x] Zenoh router config (`deploy/zenoh-dock-router.json5`) with connect endpoint `tcp/192.168.1.90:7447` (robot Pi, static)
+- [x] systemd units (`deploy/*.service`): `zenoh-dock-router`, `mowbot-dock-agent` (Restart=on-failure, After=router, `RMW_IMPLEMENTATION=rmw_zenoh_cpp`)
+- [x] One-time Pi setup checklist: `deploy/PI_SETUP.md`
+- [ ] Run PI_SETUP.md on the real Pi (flash, ROS runtime, deploy, enable services)
 - [ ] End-to-end smoke test on the Pi with the real Nano attached
 
 ## 6. Later (separate from this package)

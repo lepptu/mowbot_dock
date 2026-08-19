@@ -1,0 +1,17 @@
+# Zenoh router for the mowbot dock Pi.
+# Install: sudo cp zenoh-dock-router.service /etc/systemd/system/
+#          sudo systemctl enable --now zenoh-dock-router
+[Unit]
+Description=Zenoh router for the mowbot dock
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+Environment=ZENOH_ROUTER_CONFIG_URI=/home/ubuntu/mowbot_dock/deploy/zenoh-dock-router.json5
+ExecStart=/bin/bash -c '. /opt/ros/jazzy/setup.sh && exec /opt/ros/jazzy/lib/rmw_zenoh_cpp/rmw_zenohd'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+// Zenoh router config for the dock Pi (loaded by rmw_zenohd via
+// ZENOH_ROUTER_CONFIG_URI in zenoh-dock-router.service).
+//
+// Local ROS 2 nodes connect to this router at tcp/localhost:7447 (the
+// rmw_zenoh session default); this router federates outward to the robot's
+// router. Fields not set here keep zenoh's defaults.
+{
+  mode: "router",
+  listen: {
+    endpoints: ["tcp/[::]:7447"],
+  },
+  connect: {
+    // The robot Pi's zenoh router (static IP). The dock keeps retrying while
+    // the robot is off and re-federates automatically when it comes back.
+    endpoints: ["tcp/192.168.1.90:7447"],
+  },
+}
