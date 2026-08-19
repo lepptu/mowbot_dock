@@ -14,6 +14,26 @@ sudo apt update && sudo apt upgrade -y
 sudo usermod -aG dialout ubuntu        # serial access to the Nano
 ```
 
+## 2b. Static IP (dock Pi = 192.168.1.91)
+Edit `/etc/netplan/50-cloud-init.yaml`: under `wifis: wlan0:` replace
+`dhcp4: true` with (keep the existing `access-points:` block):
+```yaml
+      dhcp4: false
+      addresses: [192.168.1.91/24]
+      routes:
+        - to: default
+          via: 192.168.1.1
+      nameservers:
+        addresses: [192.168.1.1, 1.1.1.1]
+```
+Then stop cloud-init from regenerating the file, and apply (SSH drops —
+reconnect at 192.168.1.91):
+```bash
+echo 'network: {config: disabled}' | sudo tee /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+sudo netplan apply
+```
+Make sure the router's DHCP pool excludes (or reserves) 192.168.1.91.
+
 ## 3. Install the ROS 2 Jazzy runtime
 ```bash
 sudo apt install -y curl
