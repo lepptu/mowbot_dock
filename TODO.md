@@ -46,8 +46,16 @@ Spec source: mowbot_plans / Docking plan / `03_DOCK_PI_ROS2_AND_WEBUI.md`
 - [x] End-to-end smoke test on the Pi with the real Nano attached — agent receives EVT:BOOT:0.1.4 + status frames; dock/* topics visible over WiFi from the workstation
 - [ ] Verify zenoh federation dock↔robot with the robot powered on (robot was off during setup)
 
-## 6. Later (separate from this package)
+## 6. Next steps (ordered 2026-08-20)
+- [ ] Robot-on check: dock router federates via robot router; dock/* visible in the
+      normal workstation setup + Foxglove without overrides
+- [ ] First supervised charge: robot parked on contacts by hand, watch
+      SEATED→RAMP→CHARGING and current/voltage/fault live (eyes on it — fault
+      paths have never fired on real hardware)
+- [ ] Robot side (mowbot repos, per plan doc 04): install `opennav_docking`,
+      record dock pose, staging approach, charge detection from dock/battery_state,
+      `dock_manager` bridge node → `/dock_robot` end to end
 - [ ] Second `mowbot_mqtt_bridge` instance (dock topics.yaml, Mosquitto `dock` user/ACL)
+      — makes the web UI robot-off independent
 - [ ] Web UI: DockPanel / DockCard + FastAPI `/api/dock` endpoints (robot side)
-- [ ] `opennav_docking` integration + dock pose recording (robot side)
-- [ ] Delete `dock_smoke_test` once the real package builds
+- [ ] Cleanup: delete `dock_smoke_test`; optional foxglove_bridge unit on the dock Pi
