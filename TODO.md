@@ -47,11 +47,14 @@ Spec source: mowbot_plans / Docking plan / `03_DOCK_PI_ROS2_AND_WEBUI.md`
 - [ ] Verify zenoh federation dock↔robot with the robot powered on (robot was off during setup)
 
 ## 6. Next steps (ordered 2026-08-20)
-- [ ] Robot-on check: dock router federates via robot router; dock/* visible in the
-      normal workstation setup + Foxglove without overrides
-- [ ] First supervised charge: robot parked on contacts by hand, watch
-      SEATED→RAMP→CHARGING and current/voltage/fault live (eyes on it — fault
-      paths have never fired on real hardware)
+- [x] Robot-on check (2026-08-23): all 13 dock/* topics visible via the robot router —
+      normal workstation setup + Foxglove work without overrides
+- [x] First supervised charge (2026-08-23): three clean cycles, fault 0, no EMERGENCY/
+      NOCURRENT. RAMP invisible at 10 Hz sampling (~100 ms state) — expected.
+- [ ] Decide: firmware 0.1.4 ends charge with DRAIN→IDLE while seated (COMPLETE/state 5
+      never occurs; top-up cycling pattern). Either add COMPLETE to firmware per spec,
+      or remap agent BatteryState (IDLE && microswitch → FULL/NOT_CHARGING, not UNKNOWN)
+      so robot side can detect "done charging". Fault paths still never fired on real HW.
 - [ ] Robot side (mowbot repos, per plan doc 04): install `opennav_docking`,
       record dock pose, staging approach, charge detection from dock/battery_state,
       `dock_manager` bridge node → `/dock_robot` end to end
