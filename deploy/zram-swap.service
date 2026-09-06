@@ -1,0 +1,12 @@
+[Unit]
+Description=Compressed RAM swap (zram) — memory cushion for the 900MB dock Pi
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/zram-swap.sh
+ExecStop=/bin/sh -c 'swapoff /dev/zram0 2>/dev/null; echo 1 > /sys/block/zram0/reset 2>/dev/null; true'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

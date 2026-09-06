@@ -1,0 +1,6 @@
+[Unit]
+Description=WiFi watchdog check (recover wlan0 after brcmfmac hang)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/wifi-watchdog.sh

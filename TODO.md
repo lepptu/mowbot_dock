@@ -51,6 +51,13 @@ Spec source: mowbot_plans / Docking plan / `03_DOCK_PI_ROS2_AND_WEBUI.md`
       normal workstation setup + Foxglove work without overrides
 - [x] First supervised charge (2026-08-23): three clean cycles, fault 0, no EMERGENCY/
       NOCURRENT. RAMP invisible at 10 Hz sampling (~100 ms state) — expected.
+- [x] WiFi dropout fix (2026-09-06): dock Pi fell off WiFi minutes after boot — BCM43430
+      SDIO sleep hang (`brcmf_sdio_bus_sleep -110`) triggered by default WiFi power save.
+      Fixed: power save off at boot + brcmfmac-reload watchdog (`deploy/wifi-*`, PI_SETUP §2c).
+- [x] Memory-thrash fix (2026-09-06): Pi (900MB, no swap) froze unresponsive when
+      VS Code Remote-SSH indexed the workspace — free mem → 24MB, load → 25. Added
+      zram swap (`deploy/zram-swap.*`, PI_SETUP §2d). Likely the true cause of the
+      earlier "freezes" too, not the SD card. Avoid VS Code Remote-SSH on the Pi.
 - [ ] Decide: firmware 0.1.4 ends charge with DRAIN→IDLE while seated (COMPLETE/state 5
       never occurs; top-up cycling pattern). Either add COMPLETE to firmware per spec,
       or remap agent BatteryState (IDLE && microswitch → FULL/NOT_CHARGING, not UNKNOWN)

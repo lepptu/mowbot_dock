@@ -1,0 +1,13 @@
+[Unit]
+Description=Disable WiFi power save on wlan0 (brcmfmac SDIO sleep-state hang workaround)
+After=systemd-networkd.service netplan-wpa-wlan0.service
+
+[Service]
+Type=oneshot
+# wlan0 can appear a few seconds into boot; wait for it
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do ip link show wlan0 >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1'
+ExecStart=/usr/sbin/iw dev wlan0 set power_save off
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
