@@ -6,6 +6,10 @@ over USB serial.
 
 Plans and hardware documentation: [mowbot_plans / Docking plan](https://github.com/lepptu/mowbot_plans/tree/main/Docking%20plan)
 
+**Working on the robot side (docking, web UI)? Read [HANDOFF.md](HANDOFF.md)** —
+current status, the dock's full ROS 2 interface contract, verified real-hardware
+behavior, and operational gotchas.
+
 ## Layout
 
 ```
