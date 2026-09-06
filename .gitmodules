@@ -1,0 +1,6 @@
+[submodule "mowbot_dock_ws/src/mowbot_mqtt_bridge"]
+	path = mowbot_dock_ws/src/mowbot_mqtt_bridge
+	url = git@github.com:lepptu/mowbot_mqtt_bridge.git
+[submodule "mowbot_dock_ws/src/mowing_msgs"]
+	path = mowbot_dock_ws/src/mowing_msgs
+	url = git@github.com:lepptu/mowing_msgs.git

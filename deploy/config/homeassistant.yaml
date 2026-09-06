@@ -1,0 +1,166 @@
+# Home Assistant MQTT auto-discovery for the DOCK bridge instance — referenced
+# from topics.yaml (homeassistant_discovery: homeassistant.yaml). Same mechanism
+# as the robot bridge: one retained config per entity under
+# homeassistant/<component>/<unique_id>/config with the shared `device` block.
+# Entity keys other than unique_id/component are copied verbatim.
+#
+# COMMAND TOPICS use the ha/ros2/... prefix: HA's broker is a downstream bridge
+# of the LXC broker; ha/ros2/# is imported back with the ha/ prefix stripped
+# (mowbot-remote.conf needs one `topic ... in 1 ros2/ ha/ros2/` rule per
+# command). NEVER set retain on a command entity.
+#
+# Formulas mirror mowbot_web_ui server_lxc/frontend/src/lib/dockStatus.js.
+
+device:
+  identifiers: ["mowbot_dock"]
+  name: Mowbot Dock
+  model: Charging dock (Pi 3B + Nano)
+
+entities:
+  # ── state ────────────────────────────────────────────────────────────────
+  - unique_id: mowbot_dock_online
+    component: binary_sensor
+    name: Dock Pi Online
+    state_topic: ros2/dock/bridge_status
+    value_template: "{{ 'ON' if value_json.online else 'OFF' }}"
+    device_class: connectivity
+
+  - unique_id: mowbot_dock_charging
+    component: binary_sensor
+    name: Dock Charging
+    state_topic: ros2/dock/state
+    value_template: "{{ 'ON' if value_json.data in [2, 3] else 'OFF' }}"
+    device_class: battery_charging
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_robot_seated
+    component: binary_sensor
+    name: Dock Robot Seated
+    state_topic: ros2/dock/microswitch
+    value_template: "{{ 'ON' if value_json.data else 'OFF' }}"
+    device_class: presence
+    icon: mdi:robot-mower
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_state
+    component: sensor
+    name: Dock State
+    state_topic: ros2/dock/state
+    value_template: "{{ {0:'idle',1:'seated',2:'ramp',3:'charging',4:'drain',5:'complete',6:'selftest',7:'fault'}.get(value_json.data, 'unknown') }}"
+    icon: mdi:ev-station
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_fault
+    component: sensor
+    name: Dock Fault
+    state_topic: ros2/dock/fault
+    value_template: "{{ {0:'none',1:'overcurrent',2:'AC relay weld',3:'no 42 V',4:'watchdog silence'}.get(value_json.data, 'code ' ~ value_json.data) }}"
+    icon: mdi:alert-circle-outline
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_charge_allowed
+    component: binary_sensor
+    name: Dock Charging Allowed
+    state_topic: ros2/dock/charge_enable
+    value_template: "{{ 'ON' if value_json.data else 'OFF' }}"
+    icon: mdi:power-plug
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_self_test_result
+    component: binary_sensor
+    name: Dock Self-Test OK
+    state_topic: ros2/dock/self_test_result
+    value_template: "{{ 'ON' if value_json.data else 'OFF' }}"
+    icon: mdi:test-tube
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  # ── measurements (volatile; expire when the stream stops) ────────────────
+  - unique_id: mowbot_dock_charge_current
+    component: sensor
+    name: Dock Charge Current
+    state_topic: ros2/dock/charge_current
+    value_template: "{{ value_json.data | round(2) }}"
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    expire_after: "30"
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_charger_voltage
+    component: sensor
+    name: Dock Charger Voltage
+    state_topic: ros2/dock/charger_voltage
+    value_template: "{{ value_json.data | round(1) }}"
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    expire_after: "30"
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_pi_wifi
+    component: sensor
+    name: Dock Pi WiFi
+    state_topic: ros2/dock/pi/system
+    value_template: "{{ ((value_json.wifi_link / value_json.wifi_link_max) * 100) | round(0) if value_json.wifi_link is defined else none }}"
+    unit_of_measurement: "%"
+    icon: mdi:wifi
+    state_class: measurement
+    expire_after: "30"
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_pi_ram
+    component: sensor
+    name: Dock Pi RAM Used
+    state_topic: ros2/dock/pi/system
+    value_template: "{{ ((1 - value_json.mem_available_kb / value_json.mem_total_kb) * 100) | round(0) }}"
+    unit_of_measurement: "%"
+    icon: mdi:memory
+    state_class: measurement
+    expire_after: "30"
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  # ── controls (command topics MUST use the ha/ros2/ prefix; NEVER retain) ─
+  - unique_id: mowbot_dock_charge_enable
+    component: switch
+    name: Dock Charging Allowed
+    state_topic: ros2/dock/charge_enable
+    value_template: "{{ 'ON' if value_json.data else 'OFF' }}"
+    state_on: "ON"
+    state_off: "OFF"
+    command_topic: ha/ros2/dock/charge_enable_cmd
+    payload_on: '{"data": true}'
+    payload_off: '{"data": false}'
+    qos: "1"
+    icon: mdi:power-plug
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_clear_fault
+    component: button
+    name: Dock Clear Fault
+    command_topic: ha/ros2/dock/clear_fault_cmd
+    payload_press: '{"data": true}'
+    qos: "1"
+    icon: mdi:restart-alert
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_self_test
+    component: button
+    name: Dock Self-Test
+    command_topic: ha/ros2/dock/self_test_cmd
+    payload_press: '{"data": true}'
+    qos: "1"
+    icon: mdi:test-tube
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"

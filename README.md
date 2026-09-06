@@ -16,9 +16,13 @@ behavior, and operational gotchas.
 mowbot_dock_builder/   arm64 cross-build environment (Docker + qemu, dev machine only)
 mowbot_dock_ws/        colcon workspace
   src/mowbot_dock/     the ROS 2 package (dock_agent_node)
+  src/mowbot_mqtt_bridge/  submodule: second bridge instance (dock/* -> LXC MQTT, web UI)
+  src/mowing_msgs/     submodule: bridge dependency
+deploy/config/         dock bridge config (topics.yaml, homeassistant.yaml; secrets.yaml is local-only)
 TODO.md                implementation plan
 ```
 
+Clone with `git clone --recurse-submodules` (or `git submodule update --init`).
 The workspace path `~/mowbot_dock/mowbot_dock_ws` must be identical on the
 dev machine, inside the build container, and on the dock Pi, because the
 colcon `install/` tree bakes in absolute paths.

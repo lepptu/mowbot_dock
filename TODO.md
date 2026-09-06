@@ -65,7 +65,12 @@ Spec source: mowbot_plans / Docking plan / `03_DOCK_PI_ROS2_AND_WEBUI.md`
 - [ ] Robot side (mowbot repos, per plan doc 04): install `opennav_docking`,
       record dock pose, staging approach, charge detection from dock/battery_state,
       `dock_manager` bridge node → `/dock_robot` end to end
-- [ ] Second `mowbot_mqtt_bridge` instance (dock topics.yaml, Mosquitto `dock` user/ACL)
-      — makes the web UI robot-off independent
-- [ ] Web UI: DockPanel / DockCard + FastAPI `/api/dock` endpoints (robot side)
+- [x] Second `mowbot_mqtt_bridge` instance prepared (2026-09-06, 05_WEB_UI Phase A):
+      bridge + mowing_msgs submodules, `deploy/config/{topics,homeassistant}.yaml`,
+      `deploy/mowbot-dock-mqtt-bridge.service`, PI_SETUP §9, Dockerfile deps;
+      agent now publishes latched `dock/charge_enable` + `dock/firmware_version`.
+      **Owed on the workstation:** rebuild the builder image, `dock-build.sh`,
+      `deploy.sh`, then PI_SETUP §9a–9d on the Pi.
+- [ ] Web UI: Dock page (Phase A, in mowbot_web_ui) → dock pose `/api/dock` (Phase B) →
+      Dock/Undock control (Phase C, needs robot side)
 - [ ] Cleanup: delete `dock_smoke_test`; optional foxglove_bridge unit on the dock Pi

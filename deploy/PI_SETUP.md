@@ -137,3 +137,52 @@ With both routers up, on the robot:
 ```bash
 ros2 topic echo --once /dock/state
 ```
+
+## 9. Dock MQTT bridge (web UI) — second `mowbot_mqtt_bridge` instance
+Spec: mowbot_plans / Docking plan / `05_WEB_UI.md` §5.1. The bridge source is
+the `mowbot_dock_ws/src/mowbot_mqtt_bridge` submodule (`git submodule update
+--init` after cloning; rebuild the Docker image once for the new build deps),
+cross-built and shipped by the same `dock-build.sh` + `deploy.sh`.
+
+### 9a. Runtime libraries
+```bash
+sudo apt install -y libpaho-mqttpp3-1 libpaho-mqtt1.3 libyaml-cpp0.8 \
+  ros-jazzy-nav2-msgs ros-jazzy-ublox-ubx-msgs
+```
+
+### 9b. Broker credentials
+The LXC mosquitto account is `dock` (password in
+`/root/mowbot-mqtt-credentials.txt` on the LXC). On the Pi:
+```bash
+cp ~/mowbot_dock/deploy/config/secrets.yaml.example ~/mowbot_dock/deploy/config/secrets.yaml
+nano ~/mowbot_dock/deploy/config/secrets.yaml     # paste the password
+chmod 600 ~/mowbot_dock/deploy/config/secrets.yaml
+```
+`secrets.yaml` is gitignored and `deploy.sh` never deletes it.
+
+### 9c. Passwordless sudo for the web-UI restart / reboot / shutdown buttons
+The bridge's launch/power managers exec `sudo -n systemctl …` (no shell).
+Scoped sudoers line (matches the exact argv the bridge builds):
+```bash
+sudo tee /etc/sudoers.d/mowbot-dock-bridge >/dev/null <<'EOF'
+ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl --no-block restart mowbot-dock-agent.service, /usr/bin/systemctl --no-block restart zenoh-dock-router.service, /usr/bin/systemctl --no-block start mowbot-dock-agent.service, /usr/bin/systemctl --no-block start zenoh-dock-router.service, /usr/bin/systemctl --no-block stop mowbot-dock-agent.service, /usr/bin/systemctl --no-block stop zenoh-dock-router.service, /usr/bin/systemctl restart mowbot-dock-agent, /usr/bin/systemctl restart mowbot-dock-mqtt-bridge, /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff
+EOF
+sudo chmod 440 /etc/sudoers.d/mowbot-dock-bridge && sudo visudo -cf /etc/sudoers.d/mowbot-dock-bridge
+```
+(The two `restart <unit>` entries without `--no-block` are what `deploy.sh`
+runs.) The Logs tab reads journald: `ubuntu` must be in `adm`
+(`id ubuntu`; Ubuntu's first user is by default).
+
+### 9d. Enable the unit
+```bash
+sudo cp ~/mowbot_dock/deploy/mowbot-dock-mqtt-bridge.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mowbot-dock-mqtt-bridge
+journalctl -fu mowbot-dock-mqtt-bridge    # expect: connected to 192.168.1.133, HA discovery published
+```
+Check from the LXC: `mosquitto_sub -v -t 'ros2/dock/#' -u backend -P …` shows
+`ros2/dock/bridge_status {"online":true}` and the retained state topics.
+
+Reboot / shutdown from the web UI: a halted Pi keeps its USB 5 V, so the Nano
+keeps charging on its own interlocks; there is **no remote power-on** — the
+Pi stays off until unplugged and re-plugged.

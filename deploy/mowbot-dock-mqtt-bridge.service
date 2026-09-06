@@ -1,0 +1,21 @@
+# Dock MQTT bridge: second mowbot_mqtt_bridge instance, publishes the dock/*
+# topics straight to the LXC broker (account "dock") so the web UI sees the
+# charger even when the robot is powered off. Config: deploy/config/topics.yaml
+# (+ gitignored secrets.yaml next to it).
+# Install: sudo cp mowbot-dock-mqtt-bridge.service /etc/systemd/system/
+#          sudo systemctl enable --now mowbot-dock-mqtt-bridge
+[Unit]
+Description=Mowbot dock MQTT bridge (dock/* topics to LXC broker)
+After=network-online.target zenoh-dock-router.service
+Wants=network-online.target zenoh-dock-router.service
+
+[Service]
+User=ubuntu
+# Without this the node silently comes up on Fast DDS, invisible to zenoh.
+Environment=RMW_IMPLEMENTATION=rmw_zenoh_cpp
+ExecStart=/bin/bash -c '. /opt/ros/jazzy/setup.sh && . /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/setup.sh && exec /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/mowbot_mqtt_bridge/lib/mowbot_mqtt_bridge/mqtt_bridge_node --ros-args -p config_file:=/home/ubuntu/mowbot_dock/deploy/config/topics.yaml'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

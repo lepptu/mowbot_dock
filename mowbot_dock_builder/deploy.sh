@@ -19,10 +19,19 @@ ssh "$TARGET" 'mkdir -p ~/mowbot_dock/mowbot_dock_ws'
 rsync -av --delete "$ROOT/mowbot_dock_ws/install/" "$TARGET:mowbot_dock/mowbot_dock_ws/install/"
 rsync -av "$ROOT/deploy/" "$TARGET:mowbot_dock/deploy/"
 
-# Works once the units are installed and sudo is passwordless for systemctl;
-# otherwise restart manually: ssh in, sudo systemctl restart mowbot-dock-agent
-if ssh "$TARGET" 'sudo -n systemctl restart mowbot-dock-agent 2>/dev/null'; then
-  echo "deployed and agent restarted"
-else
-  echo "deployed (agent NOT restarted — unit not installed or sudo needs a password)"
+# deploy/config/secrets.yaml (dock broker password) is gitignored and lives
+# only on the Pi; the rsync above never deletes, so it survives every deploy.
+if ! ssh "$TARGET" 'test -f mowbot_dock/deploy/config/secrets.yaml'; then
+  echo "note: no deploy/config/secrets.yaml on the Pi yet - the MQTT bridge will not start (see PI_SETUP.md section 9)"
 fi
+
+# Works once the units are installed and sudo is passwordless for systemctl
+# (PI_SETUP.md section 9 sudoers line); otherwise restart manually.
+for unit in mowbot-dock-agent mowbot-dock-mqtt-bridge; do
+  if ssh "$TARGET" "sudo -n systemctl restart $unit 2>/dev/null"; then
+    echo "restarted $unit"
+  else
+    echo "$unit NOT restarted (unit not installed or sudo needs a password)"
+  fi
+done
+echo "deployed"

@@ -64,14 +64,20 @@ public:
       create_publisher<std_msgs::msg::Float32>("dock/charger_voltage", stream);
     pub_event_ = create_publisher<std_msgs::msg::String>("dock/event", stream);
     pub_battery_state_ = create_publisher<BatteryState>("dock/battery_state", stream);
+    // Echo of the charge permission + firmware version for the MQTT bridge /
+    // web UI (05_WEB_UI.md §2.1): latched, published on change only.
+    pub_charge_enable_ = create_publisher<std_msgs::msg::Bool>("dock/charge_enable", latched);
+    pub_firmware_version_ =
+      create_publisher<std_msgs::msg::String>("dock/firmware_version", latched);
 
     sub_charge_enable_ = create_subscription<std_msgs::msg::Bool>(
       "dock/charge_enable_cmd", stream,
       [this](const std_msgs::msg::Bool & msg) {
         if (charge_enable_ != msg.data) {
           RCLCPP_INFO(get_logger(), "charge_enable -> %s", msg.data ? "true" : "false");
+          charge_enable_ = msg.data;
+          publish_bool(*pub_charge_enable_, charge_enable_);
         }
-        charge_enable_ = msg.data;
       });
     sub_clear_fault_ = create_subscription<std_msgs::msg::Bool>(
       "dock/clear_fault_cmd", stream,
@@ -98,6 +104,7 @@ public:
     rx_timer_ = create_wall_timer(20ms, [this]() {rx_tick();});
 
     last_rx_time_ = now();
+    publish_bool(*pub_charge_enable_, charge_enable_);  // initial (default) permission
     try_open();
   }
 
@@ -183,6 +190,20 @@ private:
     std_msgs::msg::String msg;
     msg.data = line;
     pub_event_->publish(msg);
+
+    // EVT:BOOT:<ver> / EVT:VER:<ver> (60 s heartbeat) carry the firmware version.
+    for (const char * prefix : {"EVT:BOOT:", "EVT:VER:"}) {
+      const std::string p{prefix};
+      if (line.compare(0, p.size(), p) == 0 && line.size() > p.size()) {
+        const std::string version = line.substr(p.size());
+        if (version != firmware_version_) {
+          firmware_version_ = version;
+          std_msgs::msg::String v;
+          v.data = version;
+          pub_firmware_version_->publish(v);
+        }
+      }
+    }
 
     if (line == "EVT:SELFTEST:OK" || line == "EVT:SELFTEST:FAIL") {
       std_msgs::msg::Bool result;
@@ -307,6 +328,7 @@ private:
 
   SerialPort port_;
   std::optional<StatusFrame> last_frame_;
+  std::string firmware_version_;
   int clear_fault_pulse_{0};
   int self_test_pulse_{0};
   rclcpp::Time last_connect_attempt_{0, 0, RCL_ROS_TIME};
@@ -322,6 +344,8 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_charger_voltage_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_event_;
   rclcpp::Publisher<BatteryState>::SharedPtr pub_battery_state_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_charge_enable_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_firmware_version_;
 
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_charge_enable_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_clear_fault_;

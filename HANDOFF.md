@@ -52,6 +52,8 @@ Published by `dock_agent` at ~10 Hz (one publish per serial status frame):
 | `/dock/charger_voltage` | `std_msgs/Float32` | volatile | divider reading; ~0 when dock cold (AC off) |
 | `/dock/event` | `std_msgs/String` | volatile | raw firmware lines: `EVT:BOOT:<ver>`, `EVT:VER:<ver>` (60 s heartbeat), `EVT:SELFTEST:OK|FAIL`, `EVT:EMERGENCY:SWITCH`, `EVT:NOCURRENT` |
 | `/dock/battery_state` | `sensor_msgs/BatteryState` | volatile | composed view for the docking server — see §3 |
+| `/dock/charge_enable` | `std_msgs/Bool` | latched | echo of the agent's charge permission (added 2026-09-06 for the web UI) |
+| `/dock/firmware_version` | `std_msgs/String` | latched | from `EVT:BOOT`/`EVT:VER`, published on change (added 2026-09-06) |
 
 *latched = `transient_local` depth 1: late joiners immediately get the last value.
 Subscribe with default (volatile) QoS — that's compatible.
@@ -100,12 +102,16 @@ reliable. Three real charge cycles observed 2026-08-23, all clean, fault 0.
    refinement is the designed upgrade path (forward camera only — see plan).
 2. Charge detection plugin/config consuming `/dock/battery_state` (see §3 caveat).
 3. `dock_manager` bridge node integrating docking with the mission system.
-4. Second `mowbot_mqtt_bridge` instance for dock topics → MQTT (`ros2/dock/*`,
-   retained: state/microswitch/relays/fault/self_test_result; not retained:
-   current/voltage/event; new Mosquitto `dock` user/ACL). Makes web UI
-   independent of the robot being on.
-5. Web UI: DockPanel (map tab), DockCard (status), FastAPI `GET/PUT /api/dock`,
-   `POST /api/dock/record`.
+4. ~~Second `mowbot_mqtt_bridge` instance~~ **prepared 2026-09-06** (submodule +
+   `deploy/config/topics.yaml` + unit + PI_SETUP §9; build/deploy from the
+   workstation still owed). Publishes `ros2/dock/*` (retained: state/microswitch/
+   relays/fault/self_test_result/charge_enable/firmware_version; volatile:
+   current/voltage/battery_state/event/pi/system), plus `ros2/dock/{logs,launch,
+   power}/*` for the web UI's Logs tab and Dock page buttons. Mosquitto `dock`
+   account/ACL live on the LXC.
+5. Web UI (spec: plans `05_WEB_UI.md`): Phase A Dock page (telemetry +
+   maintenance + dock Pi controls), Phase B dock pose (`/api/dock`, map
+   markers), Phase C Dock/Undock control.
 
 ## 5. Operations (dock side — you shouldn't need to touch it, but when you do)
 

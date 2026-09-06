@@ -1,0 +1,202 @@
+# mowbot_mqtt_bridge config for the DOCK Pi (second bridge instance).
+# Spec: mowbot_plans / Docking plan / 05_WEB_UI.md §5.1 A2.
+#
+# Publishes the dock agent's dock/* topics to the LXC broker under
+# ros2/dock/... (account "dock") and forwards the three web-UI maintenance
+# commands back. Also gives the dock Pi the bridge's log_control (Logs tab),
+# launch_control (service restart buttons) and power_control (reboot /
+# shutdown) — all under the ros2/dock/ prefix so nothing collides with the
+# robot's bridge on the same broker.
+
+broker:
+  host: 192.168.1.133
+  port: 1883
+  # username/password live in the (gitignored, chmod 600) file below —
+  # path is relative to this file's directory. Template: secrets.yaml.example.
+  credentials_file: secrets.yaml
+
+# The web UI's "dock Pi online" signal (retained). Dock offline != robot
+# offline: the robot bridge has its own ros2/bridge/status.
+last_will:
+  topic: ros2/dock/bridge_status
+  payload: '{"online": false}'
+  retain: true
+  qos: 1
+
+stats:
+  topic: ros2/dock/bridge_stats
+  publish_rate_hz: 0.2
+
+# Dock Pi health (CPU/temp/RAM/disk/WiFi) — the Pi 3B has had WiFi power-save
+# drop-outs and RAM exhaustion (HANDOFF §5), so the web UI watches these.
+system_stats:
+  topic: ros2/dock/pi/system
+  period_s: 5
+  wifi_iface: wlan0
+
+topics:
+  # ── retained state (latched transient_local on the ROS side) ────────────
+  # The agent republishes every frame at 10 Hz, hence the 2 Hz throttle;
+  # retained so a freshly opened browser sees the last value immediately.
+  - ros2_topic: dock/state            # 0 IDLE 1 SEATED 2 RAMP 3 CHARGING 4 DRAIN 5 COMPLETE 6 SELFTEST 7 FAULT
+    mqtt_topic: ros2/dock/state
+    type: std_msgs/Int32
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    publish_rate_hz: 2
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/microswitch      # robot physically seated — the "docked" truth
+    mqtt_topic: ros2/dock/microswitch
+    type: std_msgs/Bool
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    publish_rate_hz: 2
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/relay_k1         # 42 V DC relay commanded state
+    mqtt_topic: ros2/dock/relay_k1
+    type: std_msgs/Bool
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    publish_rate_hz: 2
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/relay_k2         # mains pilot relay commanded state
+    mqtt_topic: ros2/dock/relay_k2
+    type: std_msgs/Bool
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    publish_rate_hz: 2
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/fault            # 0 none 1 overcurrent 2 AC weld 3 no 42 V 4 watchdog silence
+    mqtt_topic: ros2/dock/fault
+    type: std_msgs/Int32
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    publish_rate_hz: 2
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/self_test_result # outcome of the last self-test (on EVT:SELFTEST only)
+    mqtt_topic: ros2/dock/self_test_result
+    type: std_msgs/Bool
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/charge_enable    # the agent's charge permission (echo; on change)
+    mqtt_topic: ros2/dock/charge_enable
+    type: std_msgs/Bool
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/firmware_version # from EVT:BOOT/EVT:VER (on change)
+    mqtt_topic: ros2/dock/firmware_version
+    type: std_msgs/String
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  # ── volatile streams (staleness must be visible in the UI) ──────────────
+  - ros2_topic: dock/charge_current   # A into the pack
+    mqtt_topic: ros2/dock/charge_current
+    type: std_msgs/Float32
+    direction: publish
+    retain: false
+    mqtt_qos: 0
+    publish_rate_hz: 2
+    ros_qos: { reliability: reliable, durability: volatile, depth: 5 }
+
+  - ros2_topic: dock/charger_voltage  # ≈ 0 whenever the dock is cold
+    mqtt_topic: ros2/dock/charger_voltage
+    type: std_msgs/Float32
+    direction: publish
+    retain: false
+    mqtt_qos: 0
+    publish_rate_hz: 2
+    ros_qos: { reliability: reliable, durability: volatile, depth: 5 }
+
+  - ros2_topic: dock/battery_state    # what the robot's docking server consumes (debug view)
+    mqtt_topic: ros2/dock/battery_state
+    type: sensor_msgs/BatteryState
+    direction: publish
+    retain: false
+    mqtt_qos: 0
+    publish_rate_hz: 1
+    ros_qos: { reliability: reliable, durability: volatile, depth: 3 }
+
+  - ros2_topic: dock/event            # raw EVT:* lines, every one
+    mqtt_topic: ros2/dock/event
+    type: std_msgs/String
+    direction: publish
+    retain: false
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: volatile, depth: 10 }
+
+  # ── commands (web UI / HA -> dock agent) — NEVER retained ───────────────
+  - ros2_topic: dock/charge_enable_cmd   # level: false = charging forbidden
+    mqtt_topic: ros2/dock/charge_enable_cmd
+    type: std_msgs/Bool
+    direction: subscribe
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: volatile, depth: 1 }
+
+  - ros2_topic: dock/clear_fault_cmd     # true once -> clearFault pulse
+    mqtt_topic: ros2/dock/clear_fault_cmd
+    type: std_msgs/Bool
+    direction: subscribe
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: volatile, depth: 1 }
+
+  - ros2_topic: dock/self_test_cmd       # true once -> ≤2 s self-test (IDLE/COMPLETE only)
+    mqtt_topic: ros2/dock/self_test_cmd
+    type: std_msgs/Bool
+    direction: subscribe
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: volatile, depth: 1 }
+
+# Web UI Logs tab, "Dock" group. ubuntu must be in the adm group (journal read).
+log_control:
+  cmd_topic: ros2/dock/logs/cmd
+  data_topic: ros2/dock/logs/data
+  services_topic: ros2/dock/logs/services
+  max_lines: 500
+  min_interval_ms: 1000
+  services:
+    dock_agent:         { unit: mowbot-dock-agent.service,       label: "Dock agent (Nano ↔ ROS 2)" }
+    dock_bridge:        { unit: mowbot-dock-mqtt-bridge.service, label: "Dock MQTT bridge" }
+    dock_zenoh:         { unit: zenoh-dock-router.service,       label: "Dock zenoh router" }
+    dock_wifi_watchdog: { unit: wifi-watchdog.service,           label: "Dock WiFi watchdog" }
+
+# Web UI Dock page restart buttons (sudo -n systemctl --no-block restart <unit>).
+# Restarting the agent DTR-resets the Nano: relays drop for a few seconds and
+# the charge sequence restarts by itself (HANDOFF §5).
+launch_control:
+  cmd_topic: ros2/dock/launch/cmd
+  status_topic: ros2/dock/launch/status
+  launches:
+    dock_agent: { unit: mowbot-dock-agent.service }
+    dock_zenoh: { unit: zenoh-dock-router.service }
+
+# Web UI Dock page reboot / shutdown (sudo -n systemctl reboot|poweroff).
+# Shutdown = the Pi stays off until physically power-cycled; the Nano keeps
+# its USB 5 V and charges on its own interlocks meanwhile.
+power_control:
+  cmd_topic: ros2/dock/power/cmd
+  status_topic: ros2/dock/power/status
+  grace_ms: 1500
+  actions: [reboot, shutdown]
+
+# Home Assistant auto-discovery (device "Mowbot Dock") — path relative to
+# this file. Telemetry + maintenance commands (05_WEB_UI.md §4.9).
+homeassistant_discovery: homeassistant.yaml
