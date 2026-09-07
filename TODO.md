@@ -58,10 +58,28 @@ Spec source: mowbot_plans / Docking plan / `03_DOCK_PI_ROS2_AND_WEBUI.md`
       VS Code Remote-SSH indexed the workspace — free mem → 24MB, load → 25. Added
       zram swap (`deploy/zram-swap.*`, PI_SETUP §2d). Likely the true cause of the
       earlier "freezes" too, not the SD card. Avoid VS Code Remote-SSH on the Pi.
-- [ ] Decide: firmware 0.1.4 ends charge with DRAIN→IDLE while seated (COMPLETE/state 5
-      never occurs; top-up cycling pattern). Either add COMPLETE to firmware per spec,
-      or remap agent BatteryState (IDLE && microswitch → FULL/NOT_CHARGING, not UNKNOWN)
-      so robot side can detect "done charging". Fault paths still never fired on real HW.
+- [x] ~~Decide: firmware 0.1.4 ends charge with DRAIN→IDLE while seated …~~
+      **Resolved 2026-09-07 — firmware** (`mowbot_dock_arduino` v0.2.0, flashed
+      from this Pi). Root cause of the 08-23 observation: the journal had been
+      grepped for `state:|fault|EVT:`, which hid the agent's own
+      `charge_enable -> false/true` lines that preceded *every* DRAIN→IDLE —
+      those were enable-off commands (source unidentified), not firmware.
+      COMPLETE was separately unreachable because the docked robot's ~0.4 A
+      own draw flows through the charger; fw 0.2.0 completes at < 0.70 A with
+      V#1 ≥ 41 V for 60 s. First real COMPLETE 17:40:17; `battery_state`
+      now reports `FULL`. Also learned: fault 2 *had* fired five times, all
+      right after `EVT:EMERGENCY:SWITCH` (fixed in 0.2.0). Lesson: read the
+      agent journal unfiltered (`journalctl -u mowbot-dock-agent`, drop only
+      `EVT:VER`).
+- [ ] Top-up policy (04 §6): the dock now goes cold at COMPLETE and the parked
+      robot drains ~0.33 A from its pack. Manual today = web UI "Charging
+      allowed" off→on (verified 09-07). Agent option: when state 5 &&
+      microswitch && robot `hoverboard/battery_voltage` < ~40.5 V, pulse the
+      agent's enable false→true for a few frames. Firmware fallback exists
+      (`TOPUP_INTERVAL_S`, shipped 0 = off).
+- [ ] Optional: parse `EVT:VCC:<volts>` (fw 0.2.0, once at boot) into a
+      latched `dock/supply_voltage` Float32, same pattern as
+      `dock/firmware_version`.
 - [ ] Robot side (mowbot repos, per plan doc 04): install `opennav_docking`,
       record dock pose, staging approach, charge detection from dock/battery_state,
       `dock_manager` bridge node → `/dock_robot` end to end

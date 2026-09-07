@@ -3,7 +3,7 @@
 Status document for whoever (human or Claude) picks up the **robot-side docking
 and web UI work** on another machine. The dock is built, deployed, and verified
 charging a real robot; this file is the interface contract and operational
-knowledge you need. Last updated: 2026-09-06.
+knowledge you need. Last updated: 2026-09-07 (firmware 0.2.0, COMPLETE decision resolved).
 
 Related repos and docs:
 - This repo: `git@github.com:lepptu/mowbot_dock.git` (dock Pi software + build/deploy tooling)
@@ -19,7 +19,7 @@ Related repos and docs:
 
 ```
 DOCK PI 192.168.1.91 (Pi 3B, Ubuntu 24.04, user ubuntu)      ROBOT PI 192.168.1.90 (static)
-  Arduino Nano fw 0.1.4 ── USB /dev/ttyUSB0                    robot zenoh router :7447
+  Arduino Nano fw 0.2.0 ── USB /dev/ttyUSB0                    robot zenoh router :7447
   mowbot-dock-agent.service (dock_agent_node)                        ▲
   zenoh-dock-router.service ── connects out ────────────────────────┘
                                                        workstation 192.168.1.104 +
@@ -50,7 +50,7 @@ Published by `dock_agent` at ~10 Hz (one publish per serial status frame):
 | `/dock/self_test_result` | `std_msgs/Bool` | latched | outcome of last self-test |
 | `/dock/charge_current` | `std_msgs/Float32` | volatile | amps into the pack (±0.02 A sensor noise floor) |
 | `/dock/charger_voltage` | `std_msgs/Float32` | volatile | divider reading; ~0 when dock cold (AC off) |
-| `/dock/event` | `std_msgs/String` | volatile | raw firmware lines: `EVT:BOOT:<ver>`, `EVT:VER:<ver>` (60 s heartbeat), `EVT:SELFTEST:OK|FAIL`, `EVT:EMERGENCY:SWITCH`, `EVT:NOCURRENT` |
+| `/dock/event` | `std_msgs/String` | volatile | raw firmware lines: `EVT:BOOT:<ver>`, `EVT:VCC:<volts>` (once at boot, fw ≥ 0.2.0: the Nano's 5 V rail), `EVT:VER:<ver>` (60 s heartbeat), `EVT:SELFTEST:OK|FAIL`, `EVT:EMERGENCY:SWITCH`, `EVT:NOCURRENT` |
 | `/dock/battery_state` | `sensor_msgs/BatteryState` | volatile | composed view for the docking server — see §3 |
 | `/dock/charge_enable` | `std_msgs/Bool` | latched | echo of the agent's charge permission (added 2026-09-06 for the web UI) |
 | `/dock/firmware_version` | `std_msgs/String` | latched | from `EVT:BOOT`/`EVT:VER`, published on change (added 2026-09-06) |
@@ -77,15 +77,24 @@ Subscribed by `dock_agent` (all `std_msgs/Bool`):
   SEATED/SELFTEST/FAULT → `NOT_CHARGING`(3); IDLE → `UNKNOWN`(0).
 - `present` = microswitch.
 
-**⚠ Critical caveat for "charging finished" logic:** firmware 0.1.4 ends every
-charge with `DRAIN → IDLE` *even while the robot stays seated* — spec state 5
-(COMPLETE) has never occurred on real hardware, so `FULL` is currently never
-reported, and a parked, fully-charged robot shows `status=UNKNOWN, present=true`.
-The battery tops up in short bursts (observed: 40 s–3 min CHARGING, ~8 min idle
-gaps). Open decision (TODO.md §6): either firmware adds COMPLETE, or the agent
-remaps IDLE+seated → FULL/NOT_CHARGING. **Do not build robot-side "charge done"
-detection on `status==FULL` until this is resolved** — `present && status==UNKNOWN
-&& state==0` currently means "seated, resting between top-ups".
+**State 5 COMPLETE is real since firmware 0.2.0 (2026-09-07).** A charge ends
+`CHARGING → DRAIN → COMPLETE` once the charger current has stayed below 0.70 A
+with the charger-side voltage in the CV region for 60 s; the dock then goes
+fully cold (K1/K2 open, `charger_voltage` decays to ~0) and `battery_state`
+reports `status=FULL, present=true`. Robot-side "charge done" may be built on
+`status==FULL` (first real COMPLETE 2026-09-07 17:40:17, re-verified twice).
+The threshold is 0.70 A rather than the plan's 0.15 A because the docked robot
+stays powered from its pack and draws ~0.35–0.40 A *through the charger*, so
+the old taper level was unreachable. The dock does **not** re-enter charging
+on its own: a parked robot drains its pack at ~0.33 A until
+`charge_enable_cmd` is pulsed false→true (web UI "Enable"; the robot-side
+policy of 04 §6 is still to build — see TODO.md §6). `present && state==0`
+now means "seated but charging disabled" (or a < 1 s transient before SEATED).
+History: the 2026-08-23 "DRAIN→IDLE while seated, top-up cycling" observation
+was not firmware behaviour — the unfiltered agent journal shows
+`charge_enable -> false/true` commands at every one of those transitions
+(source on 08-23 unidentified; the journal had been grepped for
+`state:|fault|EVT:`, which hides them).
 
 **Charge/docking success detection (for opennav_docking `isCharging`):** use
 `status == CHARGING` or `current > ~0.3 A`. Verified real behavior: charging
@@ -137,14 +146,25 @@ reliable. Three real charge cycles observed 2026-08-23, all clean, fault 0.
 - Firmware watchdog: agent's 10 Hz command frames feed it. ≥2 s of silence during
   a charge → fault 4 (report-only; charging continues on firmware interlocks;
   self-clears when frames resume).
+- Nano firmware update: build in `mowbot_dock_arduino` (PlatformIO, env
+  `nanoatmega328old`), scp the hex to the Pi, then on the Pi
+  `sudo systemctl stop mowbot-dock-agent && avrdude -c arduino -p m328p
+  -P /dev/ttyUSB0 -b 57600 -D -U flash:w:<hex>:i && sudo systemctl start
+  mowbot-dock-agent`. Release hexes (incl. the previous version for rollback)
+  live in `~/firmware/` on the Pi. Full procedure: that repo's `TODO.md` M6.
 
 ## 6. Open items & untested paths
 
-- COMPLETE-state decision (§3 caveat) — blocks clean "charge done" semantics.
-- Fault paths (overcurrent, AC weld, no-42V) have **never fired on real
-  hardware** — the first real fault will be new territory.
-- `dock/charge_enable_cmd=false`, `clear_fault_cmd`, and `self_test_cmd` are
-  implemented and mock-tested but **not yet exercised against the real Nano**.
+- ~~COMPLETE-state decision~~ — resolved 2026-09-07 in firmware 0.2.0 (§3).
+- Fault 1 (overcurrent) and fault 3 (no-42V) have never fired on real
+  hardware. Fault 2 (AC weld) **did** fire five times (08-23 ×3, 09-06 ×2),
+  every time within 100 ms of `EVT:EMERGENCY:SWITCH` — a false latch from the
+  charger's hold-up transient after an unsequenced break; fixed in firmware
+  0.2.0 (1.5 s grace + 200 ms persistence on the rise detector).
+- `dock/charge_enable_cmd=false`, `clear_fault_cmd`, and `self_test_cmd` have
+  now been exercised against the real Nano: owner via the web UI 2026-09-06;
+  enable 0→1 re-entry from COMPLETE and self-test from COMPLETE via ROS
+  2026-09-07 — all OK.
 - A diagnostic "flight recorder" (`dock-flightrec` unit → UDP to workstation
   :9999) may still be running on the Pi from the 2026-09-06 memory debugging —
   remove once zram stability is confirmed (see memory notes / PI_SETUP).
