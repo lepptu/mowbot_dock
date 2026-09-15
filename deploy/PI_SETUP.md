@@ -34,6 +34,21 @@ sudo netplan apply
 ```
 Make sure the router's DHCP pool excludes (or reserves) 192.168.1.91.
 
+**Access-point pinning (2026-09-15).** All extenders share the SSID and the Pi
+picks one at boot and never roams (wpa_supplicant `bgscan` roaming wedges the
+brcmfmac driver — do not enable it). Pin the AP with the best signal by adding
+`bssid:` under the SSID entry (currently the ASUS extender):
+```yaml
+      access-points:
+        "Inteno-661A":
+          bssid: "d4:5d:64:8c:1b:b6"
+          auth: ...
+```
+Survey candidates with `sudo iw dev wlan0 scan | grep -E "^BSS|signal|SSID"`,
+but trust the *associated* `iw dev wlan0 link` signal over the scan value —
+the ASUS scanned at -88 dBm yet gives -60 dBm once associated. If the pinned
+AP is down the Pi is offline: remove the `bssid:` line, `sudo netplan apply`.
+
 ## 2c. WiFi stability fix (mandatory)
 Symptom (hit 2026-09-06): the Pi falls off WiFi entirely a few minutes after
 boot — ping dead, but the system and services keep running. dmesg fills with
