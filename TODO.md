@@ -76,7 +76,20 @@ Spec source: mowbot_plans / Docking plan / `03_DOCK_PI_ROS2_AND_WEBUI.md`
       allowed" off→on (verified 09-07). Agent option: when state 5 &&
       microswitch && robot `hoverboard/battery_voltage` < ~40.5 V, pulse the
       agent's enable false→true for a few frames. Firmware fallback exists
-      (`TOPUP_INTERVAL_S`, shipped 0 = off).
+      (`TOPUP_INTERVAL_S`, shipped 0 = off) — **now settable at runtime** as
+      `/dock_agent topup_interval_s` (below), so a fixed interval needs no code.
+- [x] Runtime parameters from ROS / web UI (2026-09-15, fw 0.2.4): `complete_a`,
+      `complete_v_min`, `complete_s`, `topup_interval_s` declared on
+      `/dock_agent` with the firmware clamps (rejects out-of-range / wrong
+      decimals), `SET:` on change + full re-send after every `EVT:BOOT`,
+      `EVT:CFG` echo → latched `dock/config/*`, `WARNING:SET:` at WARN.
+      Persistence: `~/mowbot_dock/data/dock_overrides.yaml` on the Pi, written
+      by the dock bridge's `param_control` (`ros2/dock/params/{cmd,status}`)
+      and loaded by `deploy/dock-agent-start.sh`. Mock + 7 new tests
+      (18 total). HANDOFF §2a. Web UI side: still to build.
+      Found on the way: TX during the Nano's bootloader window can leave it
+      silent for minutes (old 57600-baud bootloader eats our bytes) — the
+      agent now holds all TX until `EVT:BOOT` (HANDOFF §5).
 - [ ] Optional: parse `EVT:VCC:<volts>` (fw 0.2.0, once at boot) into a
       latched `dock/supply_voltage` Float32, same pattern as
       `dock/firmware_version`.

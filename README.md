@@ -19,6 +19,8 @@ mowbot_dock_ws/        colcon workspace
   src/mowbot_mqtt_bridge/  submodule: second bridge instance (dock/* -> LXC MQTT, web UI)
   src/mowing_msgs/     submodule: bridge dependency
 deploy/config/         dock bridge config (topics.yaml, homeassistant.yaml; secrets.yaml is local-only)
+deploy/dock-agent-start.sh  agent unit wrapper (loads data/dock_overrides.yaml when present)
+data/                  Pi only: dock_overrides.yaml = web-UI-set runtime parameters (never deployed over)
 TODO.md                implementation plan
 ```
 

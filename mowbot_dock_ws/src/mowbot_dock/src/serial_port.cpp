@@ -57,7 +57,12 @@ bool SerialPort::open(const std::string & device, int baud)
     return false;
   }
   cfmakeraw(&tio);
-  tio.c_cflag |= CLOCAL | CREAD;
+  // HUPCL: drop DTR on the last close so the next open() produces the DTR
+  // edge that resets the Nano. The kernel keeps a tty's termios across opens,
+  // so a previous tool that cleared HUPCL (e.g. a raw Python dump) would
+  // otherwise silently disable the reset for every later agent restart
+  // (seen 2026-09-15: no EVT:BOOT, Nano kept running with stale RAM values).
+  tio.c_cflag |= CLOCAL | CREAD | HUPCL;
   // VMIN=1 + O_NONBLOCK: an empty port reads as EAGAIN. (VMIN=0 would make
   // read() return 0 for "no data", indistinguishable from EOF.)
   tio.c_cc[VMIN] = 1;

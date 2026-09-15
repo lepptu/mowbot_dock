@@ -2,6 +2,9 @@
 # Install: sudo cp mowbot-dock-agent.service /etc/systemd/system/
 #          sudo systemctl enable --now mowbot-dock-agent
 # Requires: user ubuntu in the dialout group (Nano on /dev/ttyUSB0).
+# Runtime parameters (complete_a/complete_v_min/complete_s/topup_interval_s)
+# persist in /home/ubuntu/mowbot_dock/data/dock_overrides.yaml, written by
+# the dock MQTT bridge's param_control (web UI) and loaded by the wrapper.
 [Unit]
 Description=Mowbot dock agent (Nano serial to ROS 2)
 After=zenoh-dock-router.service
@@ -11,7 +14,9 @@ Wants=zenoh-dock-router.service
 User=ubuntu
 # Without this the node silently comes up on Fast DDS, invisible to zenoh.
 Environment=RMW_IMPLEMENTATION=rmw_zenoh_cpp
-ExecStart=/bin/bash -c '. /opt/ros/jazzy/setup.sh && . /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/setup.sh && exec /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/mowbot_dock/lib/mowbot_dock/dock_agent_node'
+# Wrapper: sources ROS + the install tree and adds --params-file for the
+# overrides file when it exists (rsync'd here by deploy.sh, exec bit kept).
+ExecStart=/home/ubuntu/mowbot_dock/deploy/dock-agent-start.sh
 Restart=on-failure
 RestartSec=5
 

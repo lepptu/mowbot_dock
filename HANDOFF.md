@@ -3,7 +3,8 @@
 Status document for whoever (human or Claude) picks up the **robot-side docking
 and web UI work** on another machine. The dock is built, deployed, and verified
 charging a real robot; this file is the interface contract and operational
-knowledge you need. Last updated: 2026-09-07 (firmware 0.2.0, COMPLETE decision resolved).
+knowledge you need. Last updated: 2026-09-15 (firmware 0.2.4, runtime parameters
+settable from ROS / web UI — §2a).
 
 Related repos and docs:
 - This repo: `git@github.com:lepptu/mowbot_dock.git` (dock Pi software + build/deploy tooling)
@@ -54,6 +55,10 @@ Published by `dock_agent` at ~10 Hz (one publish per serial status frame):
 | `/dock/battery_state` | `sensor_msgs/BatteryState` | volatile | composed view for the docking server — see §3 |
 | `/dock/charge_enable` | `std_msgs/Bool` | latched | echo of the agent's charge permission (added 2026-09-06 for the web UI) |
 | `/dock/firmware_version` | `std_msgs/String` | latched | from `EVT:BOOT`/`EVT:VER`, published on change (added 2026-09-06) |
+| `/dock/config/complete_a` | `std_msgs/Float32` | latched | runtime parameter as the Nano holds it (from `EVT:CFG`, fw ≥ 0.2.4, see §2a) |
+| `/dock/config/complete_v_min` | `std_msgs/Float32` | latched | ″ |
+| `/dock/config/complete_s` | `std_msgs/Int32` | latched | ″ |
+| `/dock/config/topup_interval_s` | `std_msgs/Int32` | latched | ″ |
 
 *latched = `transient_local` depth 1: late joiners immediately get the last value.
 Subscribe with default (volatile) QoS — that's compatible.
@@ -65,6 +70,47 @@ Subscribed by `dock_agent` (all `std_msgs/Bool`):
 | `/dock/charge_enable_cmd` | level: false = charging forbidden (maintenance). Default true at agent start. |
 | `/dock/clear_fault_cmd` | publish `true` once → agent pulses the firmware's edge-triggered clearFault |
 | `/dock/self_test_cmd` | publish `true` once → dock runs ≤2 s AC pulse self-test (only honored in IDLE/COMPLETE), result on `/dock/self_test_result` |
+
+## 2a. Runtime parameters (firmware 0.2.4, agent 2026-09-15)
+
+The charge-complete criterion and the firmware top-up interval are ROS 2
+parameters of `/dock_agent`, mirrored to the Nano over serial
+(`SET:<NAME>:<value>`; echoed back as `EVT:CFG:<NAME>:<value>`):
+
+| Parameter | Nano name | Type | Range | Default | Meaning |
+|---|---|---|---|---|---|
+| `complete_a` | `COMPLETE_A` | double, 2 decimals | 0.05–3.0 A | 0.65 | taper ends once charger current stays below this |
+| `complete_v_min` | `COMPLETE_V_MIN` | double, 1 decimal | 0–60 V | 41.0 | …with charger-side voltage at least this |
+| `complete_s` | `COMPLETE_S` | int | 1–3600 s | 300 | …for this long. Lowering it inside a running window can complete immediately |
+| `topup_interval_s` | `TOPUP_INTERVAL_S` | int | 0 = off, else 60–604800 s | 0 | firmware re-sequences a charge this long after COMPLETE; shorter than the time already in COMPLETE → immediately |
+
+- `ros2 param set /dock_agent complete_s 120` applies within ~100 ms (journal:
+  `-> SET:COMPLETE_S:120` then `EVT:CFG:COMPLETE_S:120`). The agent **rejects**
+  values outside the range, `topup_interval_s` 1–59, and doubles with more
+  decimals than the firmware keeps, with a reason string — the ROS value and the
+  Nano value therefore never disagree.
+- The Nano holds them in RAM only; every port open DTR-resets it to the
+  defaults. The agent re-sends all four after each `EVT:BOOT` (never before —
+  see the bootloader note in §5), with a fallback after 3 s of status frames
+  / on an uptime reset if the BOOT line was lost.
+- `/dock/config/*` carry what the Nano echoed (clamped by firmware). Right
+  after a Nano reset they briefly show the defaults, then the agent's values.
+- **Persistence = `/home/ubuntu/mowbot_dock/data/dock_overrides.yaml` on the
+  dock Pi**, in ROS params-file layout (`dock_agent: {ros__parameters: {...}}`).
+  The dock MQTT bridge's `param_control` (`deploy/config/topics.yaml`) writes it
+  on every web-UI set and re-applies it via `set_parameters` whenever
+  `/dock_agent` (re)appears; the agent unit's wrapper
+  (`deploy/dock-agent-start.sh`) also loads it with `--params-file` at start,
+  so the values are right even with the bridge down. Hand edits: same file,
+  then `sudo systemctl restart mowbot-dock-agent` (DTR-resets the Nano).
+- MQTT (web UI): cmd `ros2/dock/params/cmd` `{"action":"set","params":{"complete_s":120}}`
+  / `{"action":"get"}`; retained status `ros2/dock/params/status`
+  `{"params":{"complete_s":{"value":120,"source":"live"}},"nodes":{"dock_agent":"online"},"error":null}`;
+  applied values retained on `ros2/dock/config/<name>` as `{"data": …}`.
+  A rejected value shows up as `error` (with the agent's reason) and the
+  status refreshes to the live value.
+- Firmware `WARNING:SET: …` lines (unknown name / malformed) are logged at
+  WARN and forwarded on `/dock/event`; nothing changes on the Nano.
 
 ## 3. `/dock/battery_state` details (what the docking server consumes)
 
@@ -141,11 +187,23 @@ reliable. Three real charge cycles observed 2026-08-23, all clean, fault 0.
 - Re-flash from scratch: follow `deploy/PI_SETUP.md` top to bottom (includes the
   missing-`noble-updates` apt gotcha, static IP, and the stability fixes).
 - Serial: opening the port DTR-resets the Nano (relays drop, charge session
-  aborts, `EVT:BOOT` follows) — documented firmware design, not a bug. Agent
-  reconnects automatically every 2 s if the port vanishes.
+  aborts, `EVT:BOOT` follows ~1.5 s later) — documented firmware design, not a
+  bug. Agent reconnects automatically every 2 s if the port vanishes.
+- **Never transmit during the Nano's bootloader window** (found 2026-09-15):
+  the Nano runs the old 57600-baud ATmegaBOOT; our 115200-baud bytes arrive
+  as garbage commands and can park the bootloader waiting for "data" — the
+  Nano then stays silent (dock cold) for minutes. Reproduced 3/3 with 10 Hz
+  frames from t=0, 0/3 with a quiet open. The agent therefore sends nothing
+  (no command frames, no SETs) until `EVT:BOOT` arrives (fallback: 3 s of
+  status frames). Any other tool that opens the port must do the same.
+  A stale pre-reset status frame (and `EVT:BOOT` glued onto a cut-off frame)
+  can arrive right after open — the agent handles both.
 - Firmware watchdog: agent's 10 Hz command frames feed it. ≥2 s of silence during
   a charge → fault 4 (report-only; charging continues on firmware interlocks;
-  self-clears when frames resume).
+  self-clears when frames resume). `SET`/`GET` lines do not feed it.
+- Hardware-free testing: `tools/mock_nano.py` speaks the full protocol incl.
+  SET/GET/EVT:CFG with the firmware clamps; `test_mock_roundtrip` (gtest) runs
+  it on a pty. Run the agent against it with `-p serial_device:=<link>`.
 - Nano firmware update: build in `mowbot_dock_arduino` (PlatformIO, env
   `nanoatmega328old`), scp the hex to the Pi, then on the Pi
   `sudo systemctl stop mowbot-dock-agent && avrdude -c arduino -p m328p

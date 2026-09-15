@@ -2,7 +2,8 @@
 //
 // Opening the port asserts DTR, which resets the Nano by design: both relays
 // drop via hardware pulldowns and the firmware reboots (sends EVT:BOOT).
-// This is the documented recovery path, not a fault.
+// This is the documented recovery path, not a fault. The reset needs a DTR
+// edge, so close() must drop DTR (HUPCL, set explicitly in open()).
 #ifndef MOWBOT_DOCK__SERIAL_PORT_HPP_
 #define MOWBOT_DOCK__SERIAL_PORT_HPP_
 

@@ -129,6 +129,52 @@ entities:
     availability_topic: ros2/dock/bridge_status
     availability_template: "{{ 'online' if value_json.online else 'offline' }}"
 
+  # ── runtime parameters as held by the Nano (read-only here; set from the
+  #    web UI dock settings via ros2/dock/params/cmd) ────────────────────────
+  - unique_id: mowbot_dock_cfg_complete_a
+    component: sensor
+    name: Dock Complete Current
+    state_topic: ros2/dock/config/complete_a
+    value_template: "{{ value_json.data | round(2) }}"
+    unit_of_measurement: A
+    icon: mdi:current-dc
+    entity_category: diagnostic
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_cfg_complete_v_min
+    component: sensor
+    name: Dock Complete Min Voltage
+    state_topic: ros2/dock/config/complete_v_min
+    value_template: "{{ value_json.data | round(1) }}"
+    unit_of_measurement: V
+    icon: mdi:sine-wave
+    entity_category: diagnostic
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_cfg_complete_s
+    component: sensor
+    name: Dock Complete Window
+    state_topic: ros2/dock/config/complete_s
+    value_template: "{{ value_json.data }}"
+    unit_of_measurement: s
+    icon: mdi:timer-sand
+    entity_category: diagnostic
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
+  - unique_id: mowbot_dock_cfg_topup_interval_s
+    component: sensor
+    name: Dock Top-up Interval
+    state_topic: ros2/dock/config/topup_interval_s
+    value_template: "{{ value_json.data }}"
+    unit_of_measurement: s
+    icon: mdi:battery-sync
+    entity_category: diagnostic
+    availability_topic: ros2/dock/bridge_status
+    availability_template: "{{ 'online' if value_json.online else 'offline' }}"
+
   # ── controls (command topics MUST use the ha/ros2/ prefix; NEVER retain) ─
   - unique_id: mowbot_dock_charge_enable
     component: switch

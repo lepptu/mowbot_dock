@@ -183,6 +183,23 @@ journalctl -fu mowbot-dock-mqtt-bridge    # expect: connected to 192.168.1.133, 
 Check from the LXC: `mosquitto_sub -v -t 'ros2/dock/#' -u backend -P …` shows
 `ros2/dock/bridge_status {"online":true}` and the retained state topics.
 
+### 9e. Runtime parameters (web UI dock settings, firmware ≥ 0.2.4)
+The bridge's `param_control` section (topics.yaml) lets the web UI set the
+agent's `complete_a` / `complete_v_min` / `complete_s` / `topup_interval_s`.
+Values persist in `~/mowbot_dock/data/dock_overrides.yaml` (bridge creates the
+directory on the first set; the agent unit's wrapper loads the file when it
+exists). Since 2026-09-15 the agent unit runs `deploy/dock-agent-start.sh`
+instead of an inline command — re-install the unit once after that deploy:
+```bash
+sudo cp ~/mowbot_dock/deploy/mowbot-dock-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl restart mowbot-dock-agent   # DTR-resets the Nano
+```
+Check: `journalctl -u mowbot-dock-agent -o short-iso -n 30` shows `EVT:BOOT`,
+`Nano running: syncing runtime parameters (EVT:BOOT)`, four `-> SET:` lines,
+the Nano's own four `EVT:CFG:` default lines, then four more `EVT:CFG:` echoes
+with the agent's values.
+Ad hoc: `ros2 param set /dock_agent complete_s 120` (rejected outside 1–3600).
+
 Reboot / shutdown from the web UI: a halted Pi keeps its USB 5 V, so the Nano
 keeps charging on its own interlocks; there is **no remote power-on** — the
 Pi stays off until unplugged and re-plugged.

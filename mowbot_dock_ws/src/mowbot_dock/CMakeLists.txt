@@ -30,6 +30,11 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_frame_parser test/test_frame_parser.cpp)
   target_link_libraries(test_frame_parser dock_core)
+  # SET/GET/EVT:CFG round trip through tools/mock_nano.py on a pty (needs python3).
+  ament_add_gtest(test_mock_roundtrip test/test_mock_roundtrip.cpp TIMEOUT 60)
+  target_link_libraries(test_mock_roundtrip dock_core)
+  target_compile_definitions(test_mock_roundtrip PRIVATE
+    MOCK_NANO_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tools/mock_nano.py")
 endif()
 
 ament_package()

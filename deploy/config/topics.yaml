@@ -107,6 +107,42 @@ topics:
     mqtt_qos: 1
     ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
 
+  # Runtime parameters as the Nano actually holds them (EVT:CFG echo after
+  # every SET and at boot, firmware >= 0.2.4) — may differ from the ROS
+  # parameter for a moment after a Nano reset (defaults, then re-applied) and
+  # are the firmware-clamped values. Set them via param_control below.
+  - ros2_topic: dock/config/complete_a         # A, 0.05-3.0
+    mqtt_topic: ros2/dock/config/complete_a
+    type: std_msgs/Float32
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/config/complete_v_min     # V, 0-60
+    mqtt_topic: ros2/dock/config/complete_v_min
+    type: std_msgs/Float32
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/config/complete_s         # s, 1-3600
+    mqtt_topic: ros2/dock/config/complete_s
+    type: std_msgs/Int32
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
+  - ros2_topic: dock/config/topup_interval_s   # s, 0 = off, else 60-604800
+    mqtt_topic: ros2/dock/config/topup_interval_s
+    type: std_msgs/Int32
+    direction: publish
+    retain: true
+    mqtt_qos: 1
+    ros_qos: { reliability: reliable, durability: transient_local, depth: 1 }
+
   # ── volatile streams (staleness must be visible in the UI) ──────────────
   - ros2_topic: dock/charge_current   # A into the pack
     mqtt_topic: ros2/dock/charge_current
@@ -164,6 +200,39 @@ topics:
     direction: subscribe
     mqtt_qos: 1
     ros_qos: { reliability: reliable, durability: volatile, depth: 1 }
+
+# Web UI dock settings: the agent's Nano runtime parameters (charge-complete
+# criterion + firmware top-up). Same mechanism as the robot's mowing settings:
+#   cmd    {"action":"set","params":{"complete_s":120}}   (any subset)
+#          {"action":"get"}
+#   status {"params":{"complete_s":{"value":120,"source":"live"|"stored"|"unknown"},...},
+#          "nodes":{"dock_agent":"online"|"offline"},"error":null|"<reason>"}  (retained)
+# The bridge validates against the ranges here, persists to overrides_file
+# (source of truth across agent restarts and Pi reboots — the agent unit also
+# loads it at start), then applies live via /dock_agent/set_parameters. The
+# agent re-checks the firmware clamps (and the decimals: 2 for complete_a,
+# 1 for complete_v_min) and rejects with a reason that lands in "error".
+# What the Nano then holds is echoed on ros2/dock/config/<name>.
+param_control:
+  cmd_topic: ros2/dock/params/cmd
+  status_topic: ros2/dock/params/status
+  overrides_file: /home/ubuntu/mowbot_dock/data/dock_overrides.yaml
+  nodes:
+    dock_agent:
+      # Charge-complete current threshold [A]: taper ends once the charger
+      # current stays below this. 0.65 default; the docked robot's own draw
+      # (~0.35-0.40 A) flows through the charger, so keep it above that.
+      complete_a:       { type: double, min: 0.05, max: 3.0 }
+      # Charge-complete minimum charger-side voltage [V] (CV region check).
+      complete_v_min:   { type: double, min: 0.0, max: 60.0 }
+      # Charge-complete taper window [s]: current below complete_a with
+      # voltage >= complete_v_min for this long. Lowering it inside a running
+      # window can complete the charge immediately.
+      complete_s:       { type: int, min: 1, max: 3600 }
+      # Firmware top-up: re-sequence a charge this long after COMPLETE [s].
+      # 0 = off; otherwise 60-604800 (the agent rejects 1-59). A value shorter
+      # than the time already spent in COMPLETE re-sequences immediately.
+      topup_interval_s: { type: int, min: 0, max: 604800 }
 
 # Web UI Logs tab, "Dock" group. ubuntu must be in the adm group (journal read).
 log_control:

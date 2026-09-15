@@ -34,6 +34,23 @@ std::optional<StatusFrame> parse_status_frame(const std::string & line);
 // True for event lines ("EVT:<TYPE>[:detail]").
 bool is_event_line(const std::string & line);
 
+// True for firmware warnings ("WARNING:<what>: ..."), e.g. a rejected SET.
+bool is_warning_line(const std::string & line);
+
+// Runtime parameter echo (firmware >= 0.2.4): EVT:CFG:<NAME>:<value>, sent
+// once per parameter at boot and after every SET/GET. The value is what the
+// Nano actually holds, i.e. already clamped/rounded by the firmware.
+struct ConfigEvent
+{
+  std::string name;    // COMPLETE_A | COMPLETE_V_MIN | COMPLETE_S | TOPUP_INTERVAL_S | ...
+  std::string text;    // value exactly as printed by the firmware
+  double value;        // numeric value
+};
+
+// Returns nullopt for anything that is not a well-formed EVT:CFG line
+// (empty name, empty or non-numeric value). Unknown names are passed through.
+std::optional<ConfigEvent> parse_config_event(const std::string & line);
+
 const char * state_name(int state);        // "IDLE".."FAULT" or "?"
 const char * fault_name(int fault_code);   // "none".."watchdog silence" or "?"
 

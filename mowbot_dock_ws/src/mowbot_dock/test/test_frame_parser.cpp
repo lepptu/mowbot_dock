@@ -100,3 +100,69 @@ TEST(Names, StateAndFaultNames)
   EXPECT_STREQ(mowbot_dock::fault_name(4), "watchdog silence");
   EXPECT_STREQ(mowbot_dock::fault_name(9), "?");
 }
+
+// ── EVT:CFG / WARNING (firmware >= 0.2.4) ────────────────────────────────
+
+using mowbot_dock::parse_config_event;
+using mowbot_dock::is_warning_line;
+
+TEST(ParseConfigEvent, BootDumpLines)
+{
+  auto evt = parse_config_event("EVT:CFG:COMPLETE_A:0.65");
+  ASSERT_TRUE(evt.has_value());
+  EXPECT_EQ(evt->name, "COMPLETE_A");
+  EXPECT_EQ(evt->text, "0.65");
+  EXPECT_DOUBLE_EQ(evt->value, 0.65);
+
+  evt = parse_config_event("EVT:CFG:COMPLETE_V_MIN:41.0");
+  ASSERT_TRUE(evt.has_value());
+  EXPECT_EQ(evt->name, "COMPLETE_V_MIN");
+  EXPECT_DOUBLE_EQ(evt->value, 41.0);
+
+  evt = parse_config_event("EVT:CFG:COMPLETE_S:300");
+  ASSERT_TRUE(evt.has_value());
+  EXPECT_EQ(evt->name, "COMPLETE_S");
+  EXPECT_DOUBLE_EQ(evt->value, 300.0);
+
+  evt = parse_config_event("EVT:CFG:TOPUP_INTERVAL_S:0\r");
+  ASSERT_TRUE(evt.has_value());
+  EXPECT_EQ(evt->name, "TOPUP_INTERVAL_S");
+  EXPECT_EQ(evt->text, "0");
+  EXPECT_DOUBLE_EQ(evt->value, 0.0);
+}
+
+TEST(ParseConfigEvent, ClampedAndFutureNames)
+{
+  // The Nano echoes the clamped value, not what was sent.
+  const auto evt = parse_config_event("EVT:CFG:COMPLETE_S:3600");
+  ASSERT_TRUE(evt.has_value());
+  EXPECT_DOUBLE_EQ(evt->value, 3600.0);
+  // Unknown upper-case names pass through for forward compatibility.
+  const auto future = parse_config_event("EVT:CFG:NEW_THING_2:7");
+  ASSERT_TRUE(future.has_value());
+  EXPECT_EQ(future->name, "NEW_THING_2");
+}
+
+TEST(ParseConfigEvent, RejectsMalformed)
+{
+  EXPECT_FALSE(parse_config_event("EVT:CFG").has_value());
+  EXPECT_FALSE(parse_config_event("EVT:CFG:").has_value());
+  EXPECT_FALSE(parse_config_event("EVT:CFG:COMPLETE_S").has_value());
+  EXPECT_FALSE(parse_config_event("EVT:CFG:COMPLETE_S:").has_value());
+  EXPECT_FALSE(parse_config_event("EVT:CFG::300").has_value());
+  EXPECT_FALSE(parse_config_event("EVT:CFG:COMPLETE_S:abc").has_value());
+  EXPECT_FALSE(parse_config_event("EVT:CFG:complete_s:300").has_value());
+  EXPECT_FALSE(parse_config_event("EVT:BOOT:0.2.4").has_value());
+  EXPECT_FALSE(parse_config_event("EVT:VCC:5.157").has_value());
+  EXPECT_FALSE(parse_config_event("3,1,1,1,1.87,41.8,0,3721").has_value());
+}
+
+TEST(IsWarningLine, Classification)
+{
+  EXPECT_TRUE(is_warning_line("WARNING:SET: unknown parameter FOO"));
+  EXPECT_FALSE(is_warning_line("EVT:CFG:COMPLETE_S:300"));
+  EXPECT_FALSE(is_warning_line(" WARNING:SET:"));
+  EXPECT_FALSE(is_warning_line(""));
+  // Firmware warnings must not be mistaken for events.
+  EXPECT_FALSE(is_event_line("WARNING:SET: bad value"));
+}

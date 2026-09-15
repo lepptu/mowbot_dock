@@ -3,7 +3,10 @@
 
 Creates a pty, symlinks it at --link, and speaks the dock serial protocol
 (02_ARDUINO_FIRMWARE.md): 10 Hz 8-field status frames out, 4-field command
-frames in, EVT: lines for boot/self-test.
+frames in, EVT: lines for boot/self-test, and the firmware 0.2.4 runtime
+parameter lines (SET:<NAME>:<value> / GET -> EVT:CFG:<NAME>:<value>, with
+the firmware's clamps; WARNING:SET: for anything rejected). Like the real
+Nano the values live in RAM only and are dumped once at boot after EVT:VCC.
 
 Scenario is time-driven so it runs unattended:
   robot seats after --seat-after, charges for --charge-seconds (current decays
@@ -29,6 +32,42 @@ IDLE, SEATED, RAMP, CHARGING, DRAIN, COMPLETE, SELFTEST, FAULT = range(8)
 
 FRAME_PERIOD = 0.1
 WATCHDOG_TIMEOUT = 2.0
+MAX_LINE = 39  # firmware input buffer; longer lines are dropped
+
+# name -> (min, max, decimals or None for integers, zero_means_off, default)
+# Mirrors mowbot_dock_arduino 0.2.4 (clamped, never rejected for range).
+CONFIG_SPEC = {
+    "COMPLETE_A":       (0.05, 3.0,    2,    False, 0.65),
+    "COMPLETE_V_MIN":   (0.0,  60.0,   1,    False, 41.0),
+    "COMPLETE_S":       (1,    3600,   None, False, 300),
+    "TOPUP_INTERVAL_S": (60,   604800, None, True,  0),
+}
+
+
+def clamp_config(name, raw):
+    """Apply the firmware's clamp/rounding. Returns the applied value, or
+    None when the name is unknown or the value malformed (nothing changes)."""
+    spec = CONFIG_SPEC.get(name)
+    if spec is None:
+        return None
+    lo, hi, decimals, zero_off, _ = spec
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value != value or value in (float("inf"), float("-inf")):
+        return None
+    if decimals is None:
+        value = int(value)
+        if zero_off and value <= 0:
+            return 0
+        return max(lo, min(hi, value))
+    return round(max(lo, min(hi, value)), decimals)
+
+
+def format_config(name, value):
+    decimals = CONFIG_SPEC[name][2]
+    return f"{value}" if decimals is None else f"{value:.{decimals}f}"
 
 
 class MockNano:
@@ -42,6 +81,37 @@ class MockNano:
         self.prev_self_test = False
         self.last_cmd_time = None
         self.self_test_pending = False
+        self.config = {name: spec[4] for name, spec in CONFIG_SPEC.items()}
+
+    def boot_lines(self):
+        """What the firmware prints right after reset."""
+        return (["EVT:BOOT:mock-0.2.4", "EVT:VCC:5.0"] +
+                [self.cfg_line(name) for name in CONFIG_SPEC])
+
+    def cfg_line(self, name):
+        return f"EVT:CFG:{name}:{format_config(name, self.config[name])}"
+
+    def handle_line(self, line):
+        """One received line -> list of reply lines (may be empty)."""
+        line = line.strip()
+        if len(line) > MAX_LINE:
+            return []
+        if line == "GET":
+            return [self.cfg_line(name) for name in CONFIG_SPEC]
+        if line.startswith("SET:"):
+            parts = line.split(":")
+            if len(parts) != 3 or not parts[1] or not parts[2]:
+                return ["WARNING:SET: malformed, expected SET:<NAME>:<value>"]
+            name, raw = parts[1], parts[2]
+            if name not in CONFIG_SPEC:
+                return [f"WARNING:SET: unknown parameter {name}"]
+            applied = clamp_config(name, raw)
+            if applied is None:
+                return [f"WARNING:SET: bad value for {name}"]
+            self.config[name] = applied
+            return [self.cfg_line(name)]
+        self.handle_command(line)
+        return []
 
     def uptime(self):
         return int(time.monotonic() - self.boot_time)
@@ -171,7 +241,8 @@ def main():
     print(f"mock_nano: pty at {slave_name} (link: {args.link})", flush=True)
 
     nano = MockNano(args)
-    os.write(master_fd, b"EVT:BOOT:mock-0.1\n")
+    for line in nano.boot_lines():
+        os.write(master_fd, line.encode() + b"\n")
 
     rx = b""
     next_frame = time.monotonic()
@@ -186,7 +257,8 @@ def main():
                     break  # peer closed
                 while b"\n" in rx:
                     line, rx = rx.split(b"\n", 1)
-                    nano.handle_command(line.decode(errors="replace"))
+                    for reply in nano.handle_line(line.decode(errors="replace")):
+                        os.write(master_fd, reply.encode() + b"\n")
             if time.monotonic() >= next_frame:
                 next_frame += FRAME_PERIOD
                 for event in nano.step():

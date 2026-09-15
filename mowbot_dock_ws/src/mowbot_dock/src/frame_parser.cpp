@@ -92,6 +92,38 @@ bool is_event_line(const std::string & line)
   return line.rfind("EVT:", 0) == 0;
 }
 
+bool is_warning_line(const std::string & line)
+{
+  return line.rfind("WARNING:", 0) == 0;
+}
+
+std::optional<ConfigEvent> parse_config_event(const std::string & line)
+{
+  static const std::string kPrefix{"EVT:CFG:"};
+  if (line.compare(0, kPrefix.size(), kPrefix) != 0) {
+    return std::nullopt;
+  }
+  const std::string_view rest = trim(std::string_view{line}.substr(kPrefix.size()));
+  const size_t colon = rest.find(':');
+  if (colon == std::string_view::npos || colon == 0) {
+    return std::nullopt;
+  }
+  ConfigEvent evt;
+  evt.name = std::string{trim(rest.substr(0, colon))};
+  const std::string_view text = trim(rest.substr(colon + 1));
+  // Names are upper-case identifiers; anything else is not a config echo.
+  for (const char c : evt.name) {
+    if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_')) {
+      return std::nullopt;
+    }
+  }
+  if (!parse_number(text, evt.value)) {
+    return std::nullopt;
+  }
+  evt.text = std::string{text};
+  return evt;
+}
+
 const char * state_name(int state)
 {
   static const char * const kNames[] = {
