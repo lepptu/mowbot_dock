@@ -16,7 +16,11 @@ Environment=RMW_IMPLEMENTATION=rmw_zenoh_cpp
 # client_id must differ from the robot bridge's default ("mowbot_mqtt_bridge"):
 # the broker allows one session per client id and kicks the older one, so a
 # shared id makes the two instances disconnect each other in a loop.
-ExecStart=/bin/bash -c '. /opt/ros/jazzy/setup.sh && . /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/setup.sh && exec /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/mowbot_mqtt_bridge/lib/mowbot_mqtt_bridge/mqtt_bridge_node --ros-args -p config_file:=/home/ubuntu/mowbot_dock/deploy/config/topics.yaml -p client_id:=mowbot_dock_bridge'
+# __node remap: the binary hard-codes "mqtt_bridge_node", the same name the
+# robot's bridge uses. Two nodes with one name on the shared zenoh mesh make
+# /mqtt_bridge_node/{set,get}_parameters ambiguous (rmw_zenoh hands every
+# request to both), which blocks the robot from allowlisting its own params.
+ExecStart=/bin/bash -c '. /opt/ros/jazzy/setup.sh && . /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/setup.sh && exec /home/ubuntu/mowbot_dock/mowbot_dock_ws/install/mowbot_mqtt_bridge/lib/mowbot_mqtt_bridge/mqtt_bridge_node --ros-args -p config_file:=/home/ubuntu/mowbot_dock/deploy/config/topics.yaml -p client_id:=mowbot_dock_bridge -r __node:=dock_mqtt_bridge'
 Restart=on-failure
 RestartSec=5
 
