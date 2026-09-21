@@ -34,20 +34,26 @@ sudo netplan apply
 ```
 Make sure the router's DHCP pool excludes (or reserves) 192.168.1.91.
 
-**Access-point pinning (2026-09-15).** All extenders share the SSID and the Pi
-picks one at boot and never roams (wpa_supplicant `bgscan` roaming wedges the
-brcmfmac driver — do not enable it). Pin the AP with the best signal by adding
-`bssid:` under the SSID entry (currently the ASUS extender):
+**Access-point pinning (2026-09-15, updated 2026-09-21).** All access points
+share the SSID and the Pi picks one at boot and never roams (wpa_supplicant
+`bgscan` roaming wedges the brcmfmac driver — do not enable it). Pin the AP
+with the best signal by adding `bssid:` under the SSID entry. Current pin is
+the Raspberry Pi AP next to the dock (~-55 dBm, 72 Mbit/s):
 ```yaml
       access-points:
         "Inteno-661A":
-          bssid: "d4:5d:64:8c:1b:b6"
+          bssid: "b8:fb:b3:58:54:92"
           auth: ...
 ```
 Survey candidates with `sudo iw dev wlan0 scan | grep -E "^BSS|signal|SSID"`,
 but trust the *associated* `iw dev wlan0 link` signal over the scan value —
-the ASUS scanned at -88 dBm yet gives -60 dBm once associated. If the pinned
-AP is down the Pi is offline: remove the `bssid:` line, `sudo netplan apply`.
+scan RSSI has been off by up to 30 dB for some APs. Switch live without
+stranding the Pi: set the new bssid with `wpa_cli set_network 0 bssid`,
+`disconnect`/`reconnect`, ping the gateway for 60 s, and revert the bssid +
+`enable_network 0` on failure (run detached with `setsid nohup`). If the
+pinned AP is down the Pi is offline: remove the `bssid:` line (or pin the
+next-best AP, currently the f4:1e:57:7b:77:8e extender at about -73 dBm) and
+`sudo netplan apply`.
 
 ## 2c. WiFi stability fix (mandatory)
 Symptom (hit 2026-09-06): the Pi falls off WiFi entirely a few minutes after
