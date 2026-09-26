@@ -246,6 +246,7 @@ log_control:
     dock_bridge:        { unit: mowbot-dock-mqtt-bridge.service, label: "Dock MQTT bridge" }
     dock_zenoh:         { unit: zenoh-dock-router.service,       label: "Dock zenoh router" }
     dock_wifi_watchdog: { unit: wifi-watchdog.service,           label: "Dock WiFi watchdog" }
+    dock_zenoh_watchdog: { unit: zenoh-federation-watchdog.service, label: "Dock zenoh watchdog" }
 
 # Web UI Dock page restart buttons (sudo -n systemctl --no-block restart <unit>).
 # Restarting the agent DTR-resets the Nano: relays drop for a few seconds and

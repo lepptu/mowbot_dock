@@ -153,6 +153,42 @@ journalctl -fu mowbot-dock-agent   # watch it come up
 Also add `export RMW_IMPLEMENTATION=rmw_zenoh_cpp` to `~/.bashrc` on the Pi
 so interactive `ros2 topic` commands see the dock topics.
 
+## 7b. Zenoh federation self-heal watchdog (mandatory)
+Symptom (hit 2026-09-25, zenoh 1.6.2 / rmw_zenoh_cpp 0.2.9): after a WiFi
+blip or a robot reboot the dock router reconnects to the robot's router, but
+some reconnects leave the dock router wedged — it logs
+`Could not find corresponding link in routers network for Face{..}`
+thousands of times per hour and drops every declaration crossing that link.
+The robot then sees the dock topics with **zero publishers** and refuses
+docking with `dock_offline` although ping and the TCP link are fine. A restart
+of `zenoh-dock-router` (fresh zid, fresh link) always cleared it; the agent
+and bridge reconnect to the new router by themselves (no Nano reset).
+
+`deploy/zenoh-federation-watchdog.sh` (timer every 3 min, runs as ubuntu)
+checks, when the link to 192.168.1.90:7447 is established: (1) that log
+line in the last 3 min, and (2) the ROS graph as the *robot's* router sees
+it, via a client session straight to it — `/dock_agent` must be listed.
+Robot sees a graph without the dock agent → restart the router (at most once
+per 10 min, never within 3 min of a router start). Robot off / WiFi down →
+nothing to do. `--check` prints the verdict without acting.
+```bash
+sudo cp ~/mowbot_dock/deploy/zenoh-federation-watchdog.service \
+        ~/mowbot_dock/deploy/zenoh-federation-watchdog.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now zenoh-federation-watchdog.timer
+~/mowbot_dock/deploy/zenoh-federation-watchdog.sh --check   # "ok: robot view=ok, ..."
+```
+Logs: journal tag `zenoh-federation-watchdog` (also the web UI Logs tab,
+"Dock zenoh watchdog"). `zenoh-dock-router.service` has `TimeoutStopSec=8`
+for the same reason: a wedged link makes the router's session close hang
+(seen: 24 s "close operation timed out").
+
+Longer-term fixes, not done: rmw_zenoh_cpp 0.2.10 (zenoh 1.8.0, transport
+fixes for reconnects to the same zid) on dock + robot + workstation together,
+and a matching link lease on the robot router (the dock's config file replaces
+the rmw defaults, so the dock announces zenoh's 10 s lease while the robot's
+stock rmw_zenohd announces 60 s).
+
 ## 8. Verify from the robot side
 With both routers up, on the robot:
 ```bash

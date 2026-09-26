@@ -177,7 +177,15 @@ reliable. Three real charge cycles observed 2026-08-23, all clean, fault 0.
 - Logs: `ssh ubuntu@192.168.1.91 journalctl -fu mowbot-dock-agent` (state
   transitions and EVT lines are logged at INFO). Router: `-u zenoh-dock-router`.
 - Services on the Pi (all enabled): `zenoh-dock-router`, `mowbot-dock-agent`,
-  `wifi-powersave-off`, `wifi-watchdog.timer`, `zram-swap`.
+  `mowbot-dock-mqtt-bridge`, `wifi-powersave-off`, `wifi-watchdog.timer`,
+  `zenoh-federation-watchdog.timer`, `zram-swap`.
+- Federation self-heal (2026-09-26, `deploy/PI_SETUP.md` §7b): zenoh 1.6.2's
+  router-to-router reconnect sometimes wedges (dock router logs "Could not find
+  corresponding link in routers network", robot sees dock topics with zero
+  publishers → `dock_offline`). `zenoh-federation-watchdog.timer` checks the
+  robot router's view of the graph every 3 min and restarts `zenoh-dock-router`
+  when `/dock_agent` is missing there; the web UI Logs tab shows it as "Dock
+  zenoh watchdog".
 - Pi stability — two hard-won fixes, already in place (details in `deploy/PI_SETUP.md`
   §2c/§2d): (a) WiFi power save OFF + brcmfmac-reload watchdog — the Pi 3B's
   BCM43430 wedges its SDIO bus under default power save and drops off WiFi;

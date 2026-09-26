@@ -1,0 +1,15 @@
+# Restarts zenoh-dock-router when the robot's router can no longer see the
+# dock although the link is up (zenoh router reconnect wedge). Script +
+# rationale: deploy/zenoh-federation-watchdog.sh. Run by the .timer.
+# Install: sudo cp zenoh-federation-watchdog.{service,timer} /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now zenoh-federation-watchdog.timer
+[Unit]
+Description=Zenoh federation watchdog (restart the dock router if the robot cannot see the dock)
+After=zenoh-dock-router.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+RuntimeDirectory=zenoh-federation-watchdog
+RuntimeDirectoryPreserve=yes
+ExecStart=/home/ubuntu/mowbot_dock/deploy/zenoh-federation-watchdog.sh
